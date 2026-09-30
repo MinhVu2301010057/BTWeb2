@@ -57,8 +57,13 @@ namespace BTWeb2.Repositories
                 .FirstOrDefault();
         }
 
-        public AddBookRequestDTO AddBook(AddBookRequestDTO addBookRequestDTO)
+        public AddBookRequestDTO? AddBook(AddBookRequestDTO addBookRequestDTO)
         {
+            // Kiểm tra Publisher có tồn tại không
+            var publisherExists = _dbContext.Publishers.Any(p => p.Id == addBookRequestDTO.PublisherID);
+            if (!publisherExists)
+                return null;
+
             var bookDomainModel = new Books
             {
                 Title = addBookRequestDTO.Title,
@@ -68,18 +73,19 @@ namespace BTWeb2.Repositories
                 Rate = addBookRequestDTO.Rate,
                 Genre = addBookRequestDTO.Genre,
                 CoverUrl = addBookRequestDTO.CoverUrl,
-                DateAdded = (DateTime)addBookRequestDTO.DateAdded,
+                DateAdded = addBookRequestDTO.DateAdded ?? DateTime.Now,
                 PublisherID = addBookRequestDTO.PublisherID
             };
 
             _dbContext.Books.Add(bookDomainModel);
             _dbContext.SaveChanges();
 
+            // Thêm các tác giả liên kết
             if (addBookRequestDTO.AuthorIds != null && addBookRequestDTO.AuthorIds.Any())
             {
                 foreach (var authorId in addBookRequestDTO.AuthorIds)
                 {
-                    _dbContext.Set<Book_Author>().Add(new Book_Author
+                    _dbContext.Book_Authors.Add(new Book_Author
                     {
                         BookId = bookDomainModel.Id,
                         AuthorId = authorId
@@ -97,6 +103,11 @@ namespace BTWeb2.Repositories
             if (bookDomain == null)
                 return null;
 
+            // Kiểm tra Publisher mới có tồn tại không
+            var publisherExists = _dbContext.Publishers.Any(p => p.Id == bookDTO.PublisherID);
+            if (!publisherExists)
+                return null;
+
             bookDomain.Title = bookDTO.Title;
             bookDomain.Description = bookDTO.Description;
             bookDomain.IsRead = bookDTO.IsRead;
@@ -104,20 +115,21 @@ namespace BTWeb2.Repositories
             bookDomain.Rate = bookDTO.Rate;
             bookDomain.Genre = bookDTO.Genre;
             bookDomain.CoverUrl = bookDTO.CoverUrl;
-            bookDomain.DateAdded = (DateTime)bookDTO.DateAdded;
+            bookDomain.DateAdded = bookDTO.DateAdded ?? DateTime.Now;
             bookDomain.PublisherID = bookDTO.PublisherID;
 
-            var oldAuthors = _dbContext.Set<Book_Author>()
-     .Where(a => a.BookId == id)
-     .ToList();
-            _dbContext.Set<Book_Author>().RemoveRange(oldAuthors);
+            // Xóa quan hệ tác giả cũ
+            var oldAuthors = _dbContext.Book_Authors
+                .Where(a => a.BookId == id)
+                .ToList();
+            _dbContext.Book_Authors.RemoveRange(oldAuthors);
 
-            // Thêm quan hệ mới
-            if (bookDTO.AuthorIds != null)
+            // Thêm quan hệ tác giả mới
+            if (bookDTO.AuthorIds != null && bookDTO.AuthorIds.Any())
             {
                 foreach (var authorId in bookDTO.AuthorIds)
                 {
-                    _dbContext.Set<Book_Author>().Add(new Book_Author
+                    _dbContext.Book_Authors.Add(new Book_Author
                     {
                         BookId = id,
                         AuthorId = authorId
@@ -125,7 +137,7 @@ namespace BTWeb2.Repositories
                 }
             }
 
-            _dbContext.SaveChanges();
+            // Chỉ cần SaveChanges 1 lần duy nhất
             _dbContext.SaveChanges();
             return bookDTO;
         }
@@ -136,11 +148,13 @@ namespace BTWeb2.Repositories
             if (bookDomain == null)
                 return null;
 
-            var bookAuthors = _dbContext.Set<Book_Author>()
-    .Where(ba => ba.BookId == id)
-    .ToList();
-            _dbContext.Set<Book_Author>().RemoveRange(bookAuthors);
+            // Xóa liên kết trong bảng trung gian trước
+            var bookAuthors = _dbContext.Book_Authors
+                .Where(ba => ba.BookId == id)
+                .ToList();
+            _dbContext.Book_Authors.RemoveRange(bookAuthors);
 
+            // Xóa sách
             _dbContext.Books.Remove(bookDomain);
             _dbContext.SaveChanges();
 
