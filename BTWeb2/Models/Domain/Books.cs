@@ -15,8 +15,8 @@ namespace BTWeb2.Models.Domain
         public string CoverUrl { get; set; }
         public DateTime DateAdded { get; set; }
         public int PublisherID { get; set; }
+
         public Publishers Publisher { get; set; }
         public List<Book_Author> Book_Authors { get; set; }
-        public object Authors { get; internal set; }
     }
 }
