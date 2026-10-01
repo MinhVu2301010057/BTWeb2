@@ -5,6 +5,7 @@ using BTWeb2.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using BTWeb2.CustomActionFilter;
 
 namespace BTWeb2.Controllers
 {
@@ -38,10 +39,15 @@ namespace BTWeb2.Controllers
         }
 
         [HttpPost("add-book")]
+        [ValidateModel]
         public IActionResult AddBook([FromBody] AddBookRequestDTO addBookRequestDTO)
         {
-            var bookAdded = _bookRepository.AddBook(addBookRequestDTO);
-            return Ok(bookAdded);
+            if (ModelState.IsValid)
+            {
+                var bookAdded = _bookRepository.AddBook(addBookRequestDTO);
+                return Ok(bookAdded);
+            }
+            else return BadRequest(ModelState);
         }
 
         [HttpPut("update-book-by-id/{id:int}")]
