@@ -14,25 +14,42 @@ namespace BTWeb2.Repositories
             _dbContext = dbContext;
         }
 
-        public List<BookWithAuthorAndPublisherDTO> GetAllBooks()
+        public List<BookWithAuthorAndPublisherDTO> GetAllBooks(string? filterOn = null, string? filterQuery = null, string? sortBy = null, bool isAscending = true, int pageNumber = 1, int pageSize = 1000)
         {
-            return _dbContext.Books
-                .Select(book => new BookWithAuthorAndPublisherDTO
+            var allBooks = _dbContext.Books.Select(Books => new BookWithAuthorAndPublisherDTO()
+            {
+                Id = Books.Id,
+                Title = Books.Title,
+                Description = Books.Description,
+                IsRead = Books.IsRead,
+                DateRead = Books.IsRead ? Books.DateRead.Value : null,
+                Rate = Books.IsRead ? Books.Rate.Value : null,
+                Genre = Books.Genre,
+                CoverUrl = Books.CoverUrl,
+                PublisherName = Books.Publisher.Name,
+                AuthorNames = Books.Book_Authors.Select(n => n.Author.FullName).ToList()
+            }).AsQueryable();
+
+            if (string.IsNullOrWhiteSpace(filterOn) == false && string.IsNullOrWhiteSpace(filterQuery) == false)
+            {
+                if (filterOn.Equals("title", StringComparison.OrdinalIgnoreCase))
                 {
-                    Id = book.Id,
-                    Title = book.Title,
-                    Description = book.Description,
-                    IsRead = book.IsRead,
-                    DateRead = book.IsRead ? book.DateRead : null,
-                    Rate = book.IsRead ? book.Rate : null,
-                    Genre = book.Genre,
-                    CoverUrl = book.CoverUrl,
-                    PublisherName = book.Publisher != null ? book.Publisher.Name : null,
-                    AuthorNames = book.Book_Authors
-                        .Select(ba => ba.Author.FullName)
-                        .ToList()
-                })
-                .ToList();
+                    allBooks = allBooks.Where(x => x.Title.Contains(filterQuery));
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(sortBy) == false)
+            {
+                if (sortBy.Equals("title", StringComparison.OrdinalIgnoreCase))
+                {
+                    allBooks = isAscending
+                        ? allBooks.OrderBy(x => x.Title)
+                        : allBooks.OrderByDescending(x => x.Title);
+                }
+            }
+
+            var skipResults = (pageNumber - 1) * pageSize;
+            return allBooks.Skip(skipResults).Take(pageSize).ToList();
         }
 
         public BookWithAuthorAndPublisherDTO? GetBookById(int id)
@@ -59,7 +76,6 @@ namespace BTWeb2.Repositories
 
         public AddBookRequestDTO? AddBook(AddBookRequestDTO addBookRequestDTO)
         {
-            // Kiểm tra Publisher có tồn tại không
             var publisherExists = _dbContext.Publishers.Any(p => p.Id == addBookRequestDTO.PublisherID);
             if (!publisherExists)
                 return null;
@@ -80,7 +96,6 @@ namespace BTWeb2.Repositories
             _dbContext.Books.Add(bookDomainModel);
             _dbContext.SaveChanges();
 
-            // Thêm các tác giả liên kết
             if (addBookRequestDTO.AuthorIds != null && addBookRequestDTO.AuthorIds.Any())
             {
                 foreach (var authorId in addBookRequestDTO.AuthorIds)
@@ -103,7 +118,6 @@ namespace BTWeb2.Repositories
             if (bookDomain == null)
                 return null;
 
-            // Kiểm tra Publisher mới có tồn tại không
             var publisherExists = _dbContext.Publishers.Any(p => p.Id == bookDTO.PublisherID);
             if (!publisherExists)
                 return null;
@@ -118,13 +132,11 @@ namespace BTWeb2.Repositories
             bookDomain.DateAdded = bookDTO.DateAdded ?? DateTime.Now;
             bookDomain.PublisherID = bookDTO.PublisherID;
 
-            // Xóa quan hệ tác giả cũ
             var oldAuthors = _dbContext.Book_Authors
                 .Where(a => a.BookId == id)
                 .ToList();
             _dbContext.Book_Authors.RemoveRange(oldAuthors);
 
-            // Thêm quan hệ tác giả mới
             if (bookDTO.AuthorIds != null && bookDTO.AuthorIds.Any())
             {
                 foreach (var authorId in bookDTO.AuthorIds)
@@ -137,7 +149,6 @@ namespace BTWeb2.Repositories
                 }
             }
 
-            // Chỉ cần SaveChanges 1 lần duy nhất
             _dbContext.SaveChanges();
             return bookDTO;
         }
@@ -148,13 +159,11 @@ namespace BTWeb2.Repositories
             if (bookDomain == null)
                 return null;
 
-            // Xóa liên kết trong bảng trung gian trước
             var bookAuthors = _dbContext.Book_Authors
                 .Where(ba => ba.BookId == id)
                 .ToList();
             _dbContext.Book_Authors.RemoveRange(bookAuthors);
 
-            // Xóa sách
             _dbContext.Books.Remove(bookDomain);
             _dbContext.SaveChanges();
 
